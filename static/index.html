@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexapod Robot 3D Control & Hardware Calibration Workbench</title>
+    <link rel="stylesheet" href="style.css?v=200">
+    <script src="lib/three.min.js"></script>
+    <script src="lib/OrbitControls.js"></script>
+</head>
+<body>
+    <!-- Top Header & Nav Tabs -->
+    <header class="app-header">
+        <div class="logo-container">
+            <div class="logo-icon">6</div>
+            <div class="app-title">HEXAPOD CONTROL CENTER</div>
+        </div>
+
+        <nav class="top-nav-tabs">
+            <button class="nav-tab-btn active" data-view="viewAnimation">🎮 3D Control</button>
+            <button class="nav-tab-btn" data-view="viewSettings">⚙️ Settings & HW</button>
+            <button class="nav-tab-btn" data-view="viewCalibration">🔧 Servo Calibration</button>
+            <button class="nav-tab-btn" data-view="viewWiring">🔌 Wiring Schematic</button>
+            <button class="nav-tab-btn" data-view="viewInstructions">📖 Guide & Instructions</button>
+        </nav>
+
+        <div class="header-status">
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span id="statusText">ONLINE</span>
+            </div>
+            <button class="btn-preset primary" id="btnExportScript">Export Python Code</button>
+        </div>
+    </header>
+
+    <!-- VIEW 1: 3D ANIMATION & REALTIME CONTROL -->
+    <div class="view-screen active" id="viewAnimation">
+        <!-- Left Panel: Kinematics & Motion Control -->
+        <aside class="panel left">
+            <div class="panel-section">
+                <div class="section-title">Walking Gait Mode</div>
+                <div class="tab-selector" id="gaitTabs">
+                    <button class="tab-btn active" data-gait="tripod">Tripod</button>
+                    <button class="tab-btn" data-gait="run">⚡ Run</button>
+                    <button class="tab-btn" data-gait="ripple">Ripple</button>
+                    <button class="tab-btn" data-gait="wave">Wave</button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">Body Attitude & Pose</div>
+                
+                <div class="slider-control">
+                    <div class="slider-label"><span>Height Offset</span><span class="slider-val" id="valHeight">0 mm</span></div>
+                    <input type="range" id="slideHeight" min="-40" max="50" value="0">
+                </div>
+
+                <div class="slider-control">
+                    <div class="slider-label"><span>Pitch Angle (Forward/Back)</span><span class="slider-val" id="valPitch">0°</span></div>
+                    <input type="range" id="slidePitch" min="-25" max="25" value="0">
+                </div>
+
+                <div class="slider-control">
+                    <div class="slider-label"><span>Roll Angle (Side Tilt)</span><span class="slider-val" id="valRoll">0°</span></div>
+                    <input type="range" id="slideRoll" min="-25" max="25" value="0">
+                </div>
+
+                <div class="slider-control">
+                    <div class="slider-label"><span>Yaw Rotation (Twist)</span><span class="slider-val" id="valYaw">0°</span></div>
+                    <input type="range" id="slideYaw" min="-30" max="30" value="0">
+                </div>
+
+                <div class="slider-control">
+                    <div class="slider-label"><span>Stance Spread Width</span><span class="slider-val" id="valStance">0 mm</span></div>
+                    <input type="range" id="slideStance" min="-20" max="40" value="0">
+                </div>
+
+                <button class="btn-preset" id="btnResetAttitude" style="width: 100%; margin-top: 4px;">Reset Body Pose</button>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">Step Geometry</div>
+                
+                <div class="slider-control">
+                    <div class="slider-label"><span>Step Lift Height</span><span class="slider-val" id="valStepHeight">35 mm</span></div>
+                    <input type="range" id="slideStepHeight" min="15" max="60" value="35">
+                </div>
+
+                <div class="slider-control">
+                    <div class="slider-label"><span>Stride Length</span><span class="slider-val" id="valStepLen">60 mm</span></div>
+                    <input type="range" id="slideStepLen" min="30" max="90" value="60">
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center Viewport Area -->
+        <main class="viewport-container">
+            <div id="viewport3d"></div>
+
+            <div class="viewport-toolbar">
+                <button class="tool-btn" id="btnResetCam">📷 Reset Camera</button>
+            </div>
+
+            <!-- D-Pad Motion Control Overlay -->
+            <div class="dpad-overlay">
+                <div></div>
+                <button class="btn-dpad" id="btnFwd" title="Forward (W)">▲</button>
+                <div></div>
+                <button class="btn-dpad" id="btnLeft" title="Strafe Left (A)">◄</button>
+                <button class="btn-dpad" id="btnStop" title="Stop (Space)">■</button>
+                <button class="btn-dpad" id="btnRight" title="Strafe Right (D)">►</button>
+                <button class="btn-dpad" id="btnTurnL" title="Turn Left (Q)">↺</button>
+                <button class="btn-dpad" id="btnBwd" title="Backward (S)">▼</button>
+                <button class="btn-dpad" id="btnTurnR" title="Turn Right (E)">↻</button>
+            </div>
+        </main>
+
+        <!-- Right Panel: Telemetry & Actions -->
+        <aside class="panel right">
+            <!-- Gemini Multimodal AI Panel -->
+            <div class="panel-section" id="geminiAiPanel">
+                <div class="section-title">
+                    <span>🤖 Gemini AI Multimodal Agent</span>
+                    <button class="tool-btn" id="btnApiKeySettings" style="padding:2px 6px;">🔑 Key</button>
+                </div>
+
+                <!-- API Key Input Modal Area -->
+                <div id="apiKeyBox" style="display: none; margin-bottom: 10px;">
+                    <input type="password" id="inputApiKey" placeholder="Enter Gemini API Key..." value="" 
+                           style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--panel-border); background:#0f172a; color:#fff; font-size:0.8rem;">
+                    <button class="btn-preset primary" id="btnSaveApiKey" style="width:100%; margin-top:6px;">Save Key</button>
+                </div>
+
+                <!-- eMeet Pixy Webcam Live Preview -->
+                <div style="position:relative; width:100%; height:120px; background:#000; border-radius:8px; overflow:hidden; margin-bottom:8px; border:1px solid var(--panel-border);">
+                    <img id="camFeed" src="/api/camera/frame" alt="eMeet Pixy Camera Feed" style="width:100%; height:100%; object-fit:cover;">
+                    <div id="gestureBadge" style="position:absolute; bottom:6px; left:6px; background:rgba(0,0,0,0.7); color:var(--accent-cyan); font-size:0.7rem; padding:3px 8px; border-radius:4px; border:1px solid var(--accent-cyan);">
+                        Gesture: Idle
+                    </div>
+                </div>
+
+                <!-- Chat Message Box -->
+                <div id="chatHistory" style="height:130px; overflow-y:auto; background:rgba(15,23,42,0.8); border-radius:8px; padding:8px; border:1px solid rgba(255,255,255,0.05); margin-bottom:8px; font-size:0.78rem; display:flex; flex-direction:column; gap:6px;">
+                    <div class="msg ai"><strong>Gemini AI:</strong> Hello! Speak to me using your mic or show 5 fingers to the camera!</div>
+                </div>
+
+                <!-- Realtime Audio VU Volume Level Meter Bar (Prominent Display) -->
+                <div style="background:rgba(15,23,42,0.9); padding:8px; border-radius:8px; border:1px solid var(--panel-border); margin-bottom:8px;">
+                    <div style="font-size:0.72rem; color:var(--accent-cyan); font-weight:bold; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
+                        <span>🎙️ LIVE MIC SOUND INDICATOR</span>
+                        <span id="vuVal" style="color:var(--accent-green); font-family:monospace; font-size:0.8rem;">0%</span>
+                    </div>
+                    <div style="background:#0f172a; height:12px; border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); position:relative; margin-bottom:6px;">
+                        <div id="micVuBar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--accent-cyan), var(--accent-green), var(--accent-orange), var(--accent-red)); transition:width 0.04s linear; box-shadow: 0 0 10px var(--accent-green);"></div>
+                    </div>
+
+                    <!-- Mic Sensitivity Gain Slider -->
+                    <div class="slider-control" style="margin-bottom:4px;">
+                        <div class="slider-label" style="font-size:0.68rem; margin-bottom:2px;">
+                            <span>🎚️ Microphone Gain / Sensitivity</span>
+                            <span class="slider-val" id="valMicSensitivity" style="color:var(--accent-cyan); font-size:0.75rem;">100%</span>
+                        </div>
+                        <input type="range" id="slideMicSensitivity" min="10" max="300" value="100" style="width:100%;">
+                    </div>
+
+                    <div id="micStatusText" style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">
+                        Status: Click "Activate Mic" button to start listening.
+                    </div>
+                </div>
+
+                <!-- Voice Mic & Chat Controls -->
+                <div style="display:flex; gap:6px; margin-bottom:6px;">
+                    <input type="text" id="chatInput" placeholder="Ask Gemini something..." 
+                           style="flex:1; padding:8px; border-radius:6px; border:1px solid var(--panel-border); background:#0f172a; color:#fff; font-size:0.8rem;">
+                    <button class="btn-preset primary" id="btnSendChat">Send</button>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                    <button class="btn-preset" id="btnMic" style="background:linear-gradient(135deg, rgba(16,185,129,0.25), rgba(0,240,255,0.25)); border-color:var(--accent-green); font-weight:bold;">🎙️ Activate Mic</button>
+                    <button class="btn-preset" id="btnAskVision">👁️ Describe Scene</button>
+                </div>
+            </div>
+
+            <!-- MP3 Music Player & Lip-Sync Dance Studio Section -->
+            <div class="panel-section" id="mp3StudioPanel">
+                <div class="section-title">
+                    <span>🎵 MP3 Music Player & Lip-Sync Studio</span>
+                    <span style="font-size:0.7rem; color:var(--accent-orange);">AUDIO SUBFOLDER</span>
+                </div>
+
+                <input type="file" id="mp3FileInput" accept=".mp3,audio/mpeg,audio/*" style="display:none;">
+                <button class="btn-preset primary" id="btnUploadMp3" style="width:100%; margin-bottom:8px; background:linear-gradient(135deg, rgba(245,158,11,0.35), rgba(236,72,153,0.35)); border-color:var(--accent-orange); font-weight:bold; font-size:0.82rem; padding:8px;">📁 Import MP3 to static/audio/ Folder</button>
+
+                <div style="margin-bottom:6px;">
+                    <label class="form-label" style="font-size:0.72rem; margin-bottom:2px;">Select Imported MP3 Song:</label>
+                    <select id="selectMp3Song" class="form-select" style="width:100%; font-size:0.8rem; padding:6px;">
+                        <option value="">Loading MP3 files from audio/ folder...</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:8px;">
+                    <label class="form-label" style="font-size:0.72rem; margin-bottom:2px;">Associated Dance Routine:</label>
+                    <select id="selectMusicDance" class="form-select" style="width:100%; font-size:0.8rem; padding:6px;">
+                        <option value="Alternating Front Leg Wave" selected>👋 Alternating Front Leg Wave</option>
+                        <option value="Ultimate Combo Dance">🌟 Ultimate Combo Dance</option>
+                        <option value="Bounce & Wave Dance">🦘 Bounce & Wave Dance</option>
+                        <option value="Macarena Hexapod">💃 Macarena Hexapod</option>
+                        <option value="Catwalk Front Leg Strut">👠 Catwalk Front Leg Strut</option>
+                        <option value="Techno Beat Shuffle">⚡ Techno Beat Shuffle</option>
+                        <option value="K-Pop Synchronized Groove">🎤 K-Pop Groove</option>
+                        <option value="Disco Boogie Dance">🕺 Disco Boogie</option>
+                        <option value="Hexapod Salsa">💃 Hexapod Salsa</option>
+                        <option value="Robot Breakdance">🤖 Robot Breakdance</option>
+                        <option value="Sequential Leg Wave Shuffle">🕷️ Sequential Leg Wave</option>
+                    </select>
+                </div>
+
+                <!-- Music Controls & Progress Bar -->
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:6px;">
+                    <button class="btn-preset" id="btnPlayMusic" style="background:var(--accent-green); color:#000; font-weight:bold;">▶️ Play & Lip-Sync</button>
+                    <button class="btn-preset" id="btnPauseMusic" style="background:var(--accent-orange); color:#000; font-weight:bold;">⏸️ Pause</button>
+                    <button class="btn-preset" id="btnStopMusic" style="background:var(--accent-red); color:#fff; font-weight:bold;">⏹️ Stop</button>
+                </div>
+
+                <div style="font-size:0.7rem; color:var(--accent-cyan); font-weight:bold; margin-bottom:4px; display:flex; justify-content:space-between;">
+                    <span id="musicTrackName" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Track: None</span>
+                    <span id="musicTimeVal">0:00 / 0:00</span>
+                </div>
+                <input type="range" id="slideMusicProgress" min="0" max="100" value="0" style="width:100%; margin-bottom:6px;">
+
+                <div style="font-size:0.7rem; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
+                    <span>🔊 Volume:</span>
+                    <input type="range" id="slideMusicVolume" min="0" max="100" value="80" style="flex:1;">
+                    <span id="valMusicVolume" style="color:var(--accent-cyan);">80%</span>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">Preset Poses & Movements</div>
+                <div class="btn-group" id="presetButtons">
+                    <button class="btn-preset primary" data-pose="Alternating Front Leg Wave" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(0,240,255,0.35), rgba(16,185,129,0.35)); border-color:var(--accent-cyan); font-weight:bold; font-size:0.85rem; padding:10px;">👋 Alternating Front Leg Wave Dance (Lifts L & R Legs 1-by-1)</button>
+                    <button class="btn-preset primary" data-pose="Ultimate Combo Dance" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(236,72,153,0.35), rgba(0,240,255,0.35), rgba(168,85,247,0.35)); border-color:var(--accent-cyan); font-weight:bold; font-size:0.85rem; padding:10px;">🌟 Ultimate Combo Dance (Leg Waves + Bounce + Tilt + Twist) 🕺</button>
+                    <button class="btn-preset" data-pose="Bounce & Wave Dance" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(0,240,255,0.25)); border-color:var(--accent-green); font-weight:bold; font-size:0.85rem; padding:8px;">🦘 Bounce & Wave Dance (Up-Down Bouncing + Air Leg Waves)</button>
+                    <button class="btn-preset" data-pose="Macarena Hexapod" style="background:linear-gradient(135deg, rgba(245,158,11,0.25), rgba(236,72,153,0.25)); border-color:var(--accent-orange); font-weight:bold;">💃 Macarena Dance</button>
+                    <button class="btn-preset" data-pose="Sequential Leg Wave Shuffle">🕷️ 6-Leg Wave Shuffle</button>
+                    <button class="btn-preset" data-pose="Catwalk Front Leg Strut">👠 Catwalk Strut</button>
+                    <button class="btn-preset" data-pose="Techno Beat Shuffle">⚡ Techno Shuffle</button>
+                    <button class="btn-preset" data-pose="K-Pop Synchronized Groove">🎤 K-Pop Groove</button>
+                    <button class="btn-preset" data-pose="Stand">Stand</button>
+                    <button class="btn-preset" data-pose="Flatten Legs" style="background:linear-gradient(135deg, rgba(239,68,68,0.2), rgba(245,158,11,0.2)); border-color:var(--accent-orange); font-weight:bold;">Flatten Legs 🥞</button>
+                    <button class="btn-preset" data-pose="Dual Legs Air Wave" style="background:linear-gradient(135deg, rgba(0,240,255,0.2), rgba(168,85,247,0.2)); border-color:var(--accent-cyan); font-weight:bold;">Wave Both Legs 🌊</button>
+                    <button class="btn-preset" data-pose="Wave Front Right">Wave Right Leg 🦵</button>
+                    <button class="btn-preset" data-pose="Wave Front Left">Wave Left Leg 🦵</button>
+                    <button class="btn-preset" data-pose="Mid Legs Air Wave">Mid Legs Air Wave 🕷️</button>
+                    <button class="btn-preset" data-pose="Air Celebration">Air Celebration 🎉</button>
+                    <button class="btn-preset" data-pose="Disco Boogie Dance">Disco Boogie 🕺</button>
+                    <button class="btn-preset" data-pose="Twist & Shimmy">Twist & Shimmy 💃</button>
+                    <button class="btn-preset" data-pose="Hexapod Salsa">Hexapod Salsa 💃</button>
+                    <button class="btn-preset" data-pose="Robot Breakdance">Robot Breakdance 🤖</button>
+                    <button class="btn-preset" data-pose="Moonwalk Slide">Moonwalk Slide 🚶</button>
+                    <button class="btn-preset" data-pose="Dance Sway">Dance Sway 🎵</button>
+                    <button class="btn-preset" data-pose="Crab Walk Left">Crab Walk Left 🦀</button>
+                    <button class="btn-preset" data-pose="Crab Walk Right">Crab Walk Right 🦀</button>
+                    <button class="btn-preset" data-pose="Beg">Beg Position 🐶</button>
+                    <button class="btn-preset" data-pose="Bow / Respect">Bow / Respect</button>
+                    <button class="btn-preset" data-pose="Stretch Stance">Stretch Stance</button>
+                    <button class="btn-preset" data-pose="Sleep / Park">Sleep / Park</button>
+                    <button class="btn-preset" data-pose="Curious Tilt">Curious Tilt</button>
+                    <button class="btn-preset" data-pose="Greeting Wave">Greeting Wave</button>
+                    <button class="btn-preset" data-pose="Low Stance">Low Crouch</button>
+                    <button class="btn-preset" data-pose="High Stance">High Stance</button>
+                    <button class="btn-preset" data-pose="Attack / Aggressive">Attack Alert</button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">
+                    <span>📡 4x HC-SR04 Distance Sensors</span>
+                    <span style="font-size:0.7rem; color:var(--accent-green);">ULTRASONIC</span>
+                </div>
+                <div class="telemetry-grid">
+                    <div class="leg-card">
+                        <div class="leg-title" style="color:var(--accent-cyan)">FRONT</div>
+                        <div class="joint-row"><span id="distFront" style="font-weight:bold; color:#fff;">45 cm</span></div>
+                    </div>
+                    <div class="leg-card">
+                        <div class="leg-title" style="color:var(--accent-cyan)">REAR</div>
+                        <div class="joint-row"><span id="distRear" style="font-weight:bold; color:#fff;">120 cm</span></div>
+                    </div>
+                    <div class="leg-card">
+                        <div class="leg-title" style="color:var(--accent-cyan)">LEFT</div>
+                        <div class="joint-row"><span id="distLeft" style="font-weight:bold; color:#fff;">80 cm</span></div>
+                    </div>
+                    <div class="leg-card">
+                        <div class="leg-title" style="color:var(--accent-cyan)">RIGHT</div>
+                        <div class="joint-row"><span id="distRight" style="font-weight:bold; color:#fff;">65 cm</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">
+                    <span>⚡ L298 Motor Driver State</span>
+                    <span style="font-size:0.7rem; color:var(--accent-purple)">DUAL H-BRIDGE</span>
+                </div>
+                <div class="joint-row"><span>Ch 1 (Mouth Motor):</span><span id="motorMouthStatus" style="color:var(--text-muted); font-weight:bold;">OFF</span></div>
+                <div class="joint-row"><span>Ch 2 (Pulsating Neck):</span><span id="motorNeckStatus" style="color:var(--text-muted); font-weight:bold;">OFF</span></div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">
+                    <span>18-Servo Joint Telemetry</span>
+                    <span style="font-size:0.7rem; color:var(--accent-cyan);" id="ikStatus">IK VALID</span>
+                </div>
+                <div class="telemetry-grid" id="telemetryGrid"></div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- VIEW 2: SETTINGS & HARDWARE CONFIGURATION -->
+    <div class="view-screen" id="viewSettings">
+        <div class="settings-card">
+            <div class="section-title">🔑 Google Gemini AI API Configuration</div>
+            <div class="form-group">
+                <label class="form-label">Gemini API Key</label>
+                <input type="password" id="settingsApiKey" class="form-input" value="">
+            </div>
+            <div class="form-group">
+                <label class="form-label">AI Model Selection</label>
+                <select id="selectModel" class="form-select">
+                    <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash (Fast Multimodal)</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced Reasoning)</option>
+                    <option value="gemini-flash-latest">Gemini Flash Latest</option>
+                </select>
+            </div>
+            <button class="btn-preset primary" id="btnSaveSettings">Save AI Settings</button>
+
+            <div class="section-title" style="margin-top:16px;">🤖 Autonomous Obstacle Avoidance</div>
+            <div class="toggle-switch-container">
+                <span class="toggle-label">Enable Ultrasonic Obstacle Avoidance</span>
+                <label class="switch">
+                    <input type="checkbox" id="switchObstacleAvoidance">
+                    <span class="slider-round"></span>
+                </label>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">
+                When enabled, the hexapod automatically uses its 4x HC-SR04 ultrasonic distance sensors to detect obstacles in front (< 35 cm) and automatically steers around them!
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <div class="section-title">🎥 Audio & Video Hardware Peripherals</div>
+            
+            <div class="form-group">
+                <label class="form-label">Camera Source</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <select id="selectCamera" class="form-select" style="flex:1;">
+                        <option value="usb" selected>eMeet Pixy USB Webcam (/dev/video0) [Default]</option>
+                        <option value="1">Secondary USB Camera (/dev/video1)</option>
+                        <option value="csi">Raspberry Pi CSI Camera (Picamera2 / OV5647)</option>
+                    </select>
+                    <button class="btn-preset primary" id="btnSwitchCamera" style="white-space:nowrap;">📷 Change Camera</button>
+                    <button class="btn-preset" id="btnDefaultEmeetPixy" style="white-space:nowrap;">Set eMeet Pixy</button>
+                </div>
+                <div id="cameraStatusMsg" style="margin-top:6px; font-size:0.75rem; color:var(--accent-green); font-weight:bold;">
+                    Active Camera: eMeet Pixy USB Webcam (/dev/video0)
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Microphone Input</label>
+                <select id="selectMic" class="form-select">
+                    <option value="emeet_pixy" selected>eMeet Pixy USB Microphone</option>
+                    <option value="usb_mic">USB Microphone (Generic)</option>
+                    <option value="bluetooth_mic">Bluetooth Headset Microphone</option>
+                    <option value="default">System Default Microphone</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Speaker Audio Output</label>
+                <select id="selectSpeaker" class="form-select">
+                    <option value="bluetooth_speaker" selected>Bluetooth Speaker (A2DP / HFP)</option>
+                    <option value="emeet_pixy_speaker">eMeet Pixy USB Speaker</option>
+                    <option value="usb_audio">USB Audio Output</option>
+                    <option value="hdmi_audio">Raspberry Pi HDMI Audio</option>
+                    <option value="audio_jack">3.5mm Analog Audio Jack</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">AI Voice Speech Synthesis (TTS)</label>
+                <select id="selectVoice" class="form-select">
+                    <option value="default">Loading System Voices...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 3: SERVO CALIBRATION WORKBENCH -->
+    <div class="view-screen" id="viewCalibration">
+        <!-- Top Section: 3D Realtime Animation Preview -->
+        <div class="calib-top-section">
+            <!-- 3D Hexapod Live Animation Preview -->
+            <div class="settings-card calib-3d-card">
+                <div class="section-title" style="margin:0; display:flex; justify-content:space-between; align-items:center;">
+                    <span>🎥 Live 3D Calibration Preview</span>
+                    <button class="tool-btn" id="btnResetCamCalib">📷 Reset Camera</button>
+                </div>
+                <div class="viewport-container calib-viewport-container">
+                    <div id="calibViewport3d" style="width:100%; height:100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Banner Window: Gait & Motion Test Commands & Quick Stances -->
+        <div class="settings-card calib-bottom-banner">
+            <div class="section-title">🧪 Gait & Motion Test Commands & Quick Stances</div>
+            
+            <div class="calib-banner-controls">
+                <!-- Test Gait Commands Group -->
+                <div class="calib-banner-group">
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label class="form-label">Test Gait Pattern</label>
+                        <select id="calibGaitSelect" class="form-select">
+                            <option value="tripod">Tripod Gait</option>
+                            <option value="run">⚡ Run Gait</option>
+                            <option value="ripple">Ripple Gait</option>
+                            <option value="wave">Wave Gait</option>
+                        </select>
+                    </div>
+
+                    <div class="calib-btn-grid">
+                        <button class="btn-preset primary" id="btnTestGaitForward">Walk Forward</button>
+                        <button class="btn-preset" id="btnTestGaitStop" style="background:var(--accent-red); color:#fff; font-weight:bold;">Stop Motion</button>
+                        <button class="btn-preset" id="btnTestGaitTurnL">Turn Left</button>
+                        <button class="btn-preset" id="btnTestGaitTurnR">Turn Right</button>
+                    </div>
+                </div>
+
+                <!-- Pose Dropdown & Preset Selector Group -->
+                <div class="calib-banner-group">
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label class="form-label">Preset Stance / Motion Pose</label>
+                        <select id="calibPoseSelect" class="form-select">
+                            <option value="Stand" selected>Stand (Neutral)</option>
+                            <option value="Alternating Front Leg Wave">👋 Alternating Front Leg Wave</option>
+                            <option value="Macarena Hexapod">💃 Macarena Hexapod</option>
+                            <option value="Sequential Leg Wave Shuffle">🕷️ Sequential Leg Wave</option>
+                            <option value="Catwalk Front Leg Strut">👠 Catwalk Front Leg Strut</option>
+                            <option value="Techno Beat Shuffle">⚡ Techno Beat Shuffle</option>
+                            <option value="K-Pop Synchronized Groove">🎤 K-Pop Groove</option>
+                            <option value="Flatten Legs">Flatten Legs 🥞 (Pancake)</option>
+                            <option value="Low Stance">Low Crouch</option>
+                            <option value="High Stance">High Stance</option>
+                            <option value="Ultimate Combo Dance">🌟 Ultimate Combo Dance</option>
+                            <option value="Bounce & Wave Dance">🦘 Bounce & Wave Dance</option>
+                            <option value="Dual Legs Air Wave">🌊 Dual Legs Air Wave</option>
+                            <option value="Wave Front Right">🦵 Wave Front Right</option>
+                            <option value="Wave Front Left">🦵 Wave Front Left</option>
+                            <option value="Mid Legs Air Wave">🕷️ Mid Legs Air Wave</option>
+                            <option value="Air Celebration">🎉 Air Celebration</option>
+                            <option value="Disco Boogie Dance">🕺 Disco Boogie</option>
+                            <option value="Twist & Shimmy">💃 Twist & Shimmy</option>
+                            <option value="Hexapod Salsa">💃 Hexapod Salsa</option>
+                            <option value="Robot Breakdance">🤖 Robot Breakdance</option>
+                            <option value="Moonwalk Slide">🚶 Moonwalk Slide</option>
+                            <option value="Dance Sway">🎵 Dance Sway</option>
+                            <option value="Beg">🐶 Beg Position</option>
+                            <option value="Bow / Respect">Bow / Respect</option>
+                            <option value="Stretch Stance">Stretch Stance</option>
+                            <option value="Sleep / Park">Sleep / Park</option>
+                            <option value="Curious Tilt">Curious Tilt</option>
+                            <option value="Greeting Wave">Greeting Wave</option>
+                            <option value="Attack / Aggressive">Attack Alert</option>
+                        </select>
+                    </div>
+
+                    <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:4px; font-weight:bold; text-transform:uppercase;">Quick Stance Buttons</div>
+                    <div class="btn-group" id="calibQuickPoses" style="grid-template-columns: repeat(4, 1fr); gap:6px;">
+                        <button class="btn-preset primary" data-pose="Stand">Stand Neutral</button>
+                        <button class="btn-preset" data-pose="Flatten Legs" style="background:linear-gradient(135deg, rgba(239,68,68,0.2), rgba(245,158,11,0.2)); border-color:var(--accent-orange); font-weight:bold;">Pancake 🥞</button>
+                        <button class="btn-preset" data-pose="Low Stance">Low Crouch</button>
+                        <button class="btn-preset" data-pose="High Stance">High Stance</button>
+                        <button class="btn-preset" data-pose="Beg">Beg Position 🐶</button>
+                        <button class="btn-preset" data-pose="Bow / Respect">Bow / Respect</button>
+                        <button class="btn-preset" data-pose="Sleep / Park">Sleep / Park</button>
+                        <button class="btn-preset" data-pose="Ultimate Combo Dance" style="background:linear-gradient(135deg, rgba(236,72,153,0.25), rgba(0,240,255,0.25)); border-color:var(--accent-cyan); font-weight:bold;">Ultimate Dance 🌟</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 18-Servo Trim Angle Calibration & Fine Tuning Grid (Below Quick Stance Buttons) -->
+            <div style="margin-top:16px; border-top:1px solid var(--panel-border); padding-top:16px;">
+                <div class="section-title" style="margin-bottom:12px;">🔧 18-Servo Trim Angle Calibration & Fine Tuning</div>
+                <div class="calibration-grid" id="calibrationGrid">
+                    <!-- Dynamically populated 6 Leg Calibration Cards -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 4: WIRING DIAGRAM & SCHEMATIC VIEW -->
+    <div class="view-screen" id="viewWiring">
+        <div class="wiring-container">
+            <!-- Printable PDF Document Header (Visible only when exporting/printing) -->
+            <div class="print-doc-header">
+                <div class="print-doc-logo">6</div>
+                <div>
+                    <h1 class="print-doc-title">HEXAPOD ROBOTICS HARDWARE ELECTRICAL SCHEMATIC</h1>
+                    <p class="print-doc-sub">Raspberry Pi 4/5 Core • Dual PCA9685 PWM (18x Servos) • L298N Motor Driver • 4x Ultrasonic Sensors • Power Management</p>
+                    <p class="print-doc-meta">Document Rev: 2.4 • System Bus: I2C (400kHz) • Max Current: 10A @ 5V DC • Generated: Hexapod Control Center Workbench</p>
+                </div>
+            </div>
+
+            <!-- Top Action Header -->
+            <div class="wiring-header-card">
+                <div class="wiring-header-title-box">
+                    <div class="wiring-header-icon">🔌</div>
+                    <div>
+                        <h2 class="wiring-title">Hexapod Electrical Wiring Diagram & Pinout Schematic</h2>
+                        <p class="wiring-subtitle">
+                            Raspberry Pi 4/5 Core | Dual PCA9685 18x Servo Controllers | L298N Motor Driver | 4x HC-SR04 Ultrasonic Sensors
+                        </p>
+                        <div class="wiring-meta-badges">
+                            <span class="meta-badge">📋 Rev 2.4</span>
+                            <span class="meta-badge i2c">⚡ I2C Bus: 0x40 / 0x41</span>
+                            <span class="meta-badge pwr">🔋 5V 10A UBEC Bus</span>
+                            <span class="meta-badge gpio">🤖 18 Servo Channels</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wiring-actions" style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn-preset primary print-btn" id="btnExportWiringPDF">
+                        📄 Export Schematic to PDF
+                    </button>
+                    <button class="btn-preset print-btn" id="btnPrintWiringPDF" style="background: rgba(255,255,255,0.08); border: 1px solid var(--panel-border); color: #fff;">
+                        🖨️ Quick Print
+                    </button>
+                </div>
+            </div>
+
+            <!-- System Architecture Summary Diagram -->
+            <div class="wiring-overview-grid">
+                <div class="overview-box pwr-box">
+                    <div class="ob-icon">🔋</div>
+                    <div class="ob-content">
+                        <h4>Power Distribution</h4>
+                        <p>2S/3S LiPo Battery ➔ 5V 10A UBEC Buck Regulator ➔ PCA9685 V+ Terminals & Pi 5V Pins</p>
+                    </div>
+                </div>
+
+                <div class="overview-box i2c-box">
+                    <div class="ob-icon">⚡</div>
+                    <div class="ob-content">
+                        <h4>I2C Communication Bus</h4>
+                        <p>Pi GPIO 2 (SDA) & GPIO 3 (SCL) ➔ Daisy-Chained PCA9685 Board 1 (0x40) & Board 2 (0x41)</p>
+                    </div>
+                </div>
+
+                <div class="overview-box motor-box">
+                    <div class="ob-icon">⚙️</div>
+                    <div class="ob-content">
+                        <h4>Motor Actuators Driver</h4>
+                        <p>Pi GPIO 18, 23, 24 (Mouth Motor) & GPIO 19, 25, 8 (Neck Motor) ➔ L298N Dual H-Bridge</p>
+                    </div>
+                </div>
+
+                <div class="overview-box sensor-box">
+                    <div class="ob-icon">📡</div>
+                    <div class="ob-content">
+                        <h4>Ultrasonic Sensor Array</h4>
+                        <p>4x HC-SR04 (Front, Rear, Left, Right) ➔ GPIO Triggers & Voltage Divided Echo Inputs (3.3V)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graphical Visual Vector Schematic Diagram Card -->
+            <div class="wiring-card full-width visual-schematic-card">
+                <div class="wiring-card-header">
+                    <span class="wiring-badge rpi" style="background:linear-gradient(135deg, rgba(0,240,255,0.2), rgba(16,185,129,0.2)); border-color:var(--accent-cyan); color:var(--accent-cyan);">GRAPHICAL SCHEMATIC</span>
+                    <h3>Interactive Electrical Wiring Diagram & Signal Traces</h3>
+                </div>
+                
+                <div class="schematic-svg-wrapper">
+                    <svg viewBox="0 0 1100 700">
+                        <defs>
+                            <linearGradient id="rpiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#1e293b"/>
+                                <stop offset="100%" stop-color="#0f172a"/>
+                            </linearGradient>
+                            <linearGradient id="pcaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#1e3a8a"/>
+                                <stop offset="100%" stop-color="#0f172a"/>
+                            </linearGradient>
+                            <linearGradient id="pwrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#854d0e"/>
+                                <stop offset="100%" stop-color="#1e293b"/>
+                            </linearGradient>
+                            <linearGradient id="l298Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#581c87"/>
+                                <stop offset="100%" stop-color="#0f172a"/>
+                            </linearGradient>
+                            <linearGradient id="sensorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#065f46"/>
+                                <stop offset="100%" stop-color="#0f172a"/>
+                            </linearGradient>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="2" result="blur"/>
+                                <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Background grid pattern -->
+                        <rect width="1100" height="700" fill="#090d16" rx="8"/>
+                        <path d="M 0 50 L 1100 50 M 0 100 L 1100 100 M 0 150 L 1100 150 M 0 200 L 1100 200 M 0 250 L 1100 250 M 0 300 L 1100 300 M 0 350 L 1100 350 M 0 400 L 1100 400 M 0 450 L 1100 450 M 0 500 L 1100 500 M 0 550 L 1100 550 M 0 600 L 1100 600 M 0 650 L 1100 650" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+                        <path d="M 50 0 L 50 700 M 100 0 L 100 700 M 150 0 L 150 700 M 200 0 L 200 700 M 250 0 L 250 700 M 300 0 L 300 700 M 350 0 L 350 700 M 400 0 L 400 700 M 450 0 L 450 700 M 500 0 L 500 700 M 550 0 L 550 700 M 600 0 L 600 700 M 650 0 L 650 700 M 700 0 L 700 700 M 750 0 L 750 700 M 800 0 L 800 700 M 850 0 L 850 700 M 900 0 L 900 700 M 950 0 L 950 700 M 1000 0 L 1000 700 M 1050 0 L 1050 700" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+
+                        <!-- COMPONENT 1: POWER SUPPLY & UBEC -->
+                        <g id="cmp-power">
+                            <rect x="30" y="30" width="220" height="120" rx="10" fill="url(#pwrGrad)" stroke="#f59e0b" stroke-width="2"/>
+                            <text x="45" y="55" fill="#fbbf24" font-weight="bold" font-size="13">🔋 POWER SYSTEM</text>
+                            <text x="45" y="75" fill="#cbd5e1" font-size="10">2S/3S LiPo Battery (7.4V - 11.1V)</text>
+                            <text x="45" y="92" fill="#38bdf8" font-size="10">⚡ UBEC 5V 10A DC Buck Regulator</text>
+                            <rect x="45" y="105" width="85" height="25" rx="4" fill="#0f172a" stroke="#ef4444"/>
+                            <text x="55" y="122" fill="#ef4444" font-weight="bold">+5V DC (10A)</text>
+                            <rect x="145" y="105" width="85" height="25" rx="4" fill="#0f172a" stroke="#10b981"/>
+                            <text x="165" y="122" fill="#10b981" font-weight="bold">GND (Common)</text>
+                        </g>
+
+                        <!-- COMPONENT 2: RASPBERRY PI 4/5 MASTER CONTROLLER -->
+                        <g id="cmp-rpi">
+                            <rect x="30" y="180" width="280" height="340" rx="12" fill="url(#rpiGrad)" stroke="#ef4444" stroke-width="2.5"/>
+                            <rect x="40" y="190" width="260" height="30" rx="6" fill="#1e1b4b" stroke="#818cf8"/>
+                            <text x="50" y="210" fill="#a5b4fc" font-weight="bold" font-size="13">🍓 RASPBERRY PI 4 / 5 CORE</text>
+                            
+                            <!-- 40-Pin Header Representation -->
+                            <rect x="250" y="235" width="48" height="270" rx="4" fill="#020617" stroke="#475569"/>
+                            <text x="255" y="250" fill="#94a3b8" font-size="8">40-PIN</text>
+                            
+                            <!-- Key Pin Callouts on Pi -->
+                            <g fill="#e2e8f0" font-size="9.5">
+                                <text x="45" y="252" fill="#ef4444">Pin 2: +5V VCC Power</text>
+                                <text x="45" y="272" fill="#10b981">Pin 6: Common GND</text>
+                                <text x="45" y="292" fill="#00f0ff">GPIO 2 (Pin 3): I2C SDA</text>
+                                <text x="45" y="312" fill="#f59e0b">GPIO 3 (Pin 5): I2C SCL</text>
+                                <text x="45" y="332" fill="#c084fc">GPIO 18/23/24: Mouth Motor</text>
+                                <text x="45" y="352" fill="#c084fc">GPIO 19/25/8: Neck Motor</text>
+                                <text x="45" y="372" fill="#34d399">GPIO 5/6: Front Ultrasonic</text>
+                                <text x="45" y="392" fill="#34d399">GPIO 12/13: Rear Ultrasonic</text>
+                                <text x="45" y="412" fill="#34d399">GPIO 16/20: Left Ultrasonic</text>
+                                <text x="45" y="432" fill="#34d399">GPIO 21/26: Right Ultrasonic</text>
+                                <text x="45" y="460" fill="#94a3b8">USB Camera & Mic Attached</text>
+                                <text x="45" y="480" fill="#94a3b8">Speaker Bluetooth / Jack</text>
+                            </g>
+                        </g>
+
+                        <!-- COMPONENT 3: PCA9685 BOARD 1 (ADDRESS 0x40 - RIGHT LEGS 0-8) -->
+                        <g id="cmp-pca1">
+                            <rect x="380" y="30" width="310" height="280" rx="10" fill="url(#pcaGrad)" stroke="#00f0ff" stroke-width="2"/>
+                            <text x="395" y="55" fill="#38bdf8" font-weight="bold" font-size="13">🤖 PCA9685 BOARD 1 (0x40)</text>
+                            <text x="395" y="72" fill="#94a3b8" font-size="9.5">Servos 0-8 • Right Tri-Leg (RF, RM, RR)</text>
+
+                            <!-- Screw Terminal & Logic Header -->
+                            <rect x="395" y="85" width="110" height="35" rx="4" fill="#0f172a" stroke="#f59e0b"/>
+                            <text x="403" y="100" fill="#f59e0b" font-weight="bold" font-size="9.5">V+ POWER IN</text>
+                            <text x="403" y="114" fill="#cbd5e1" font-size="8.5">+5V 10A UBEC Bus</text>
+
+                            <!-- Channels breakdown -->
+                            <g font-size="9" fill="#e2e8f0">
+                                <text x="395" y="140" fill="#00f0ff" font-weight="bold">Ch 0-2: Right Front (RF) Leg</text>
+                                <text x="410" y="155">Ch 0: Coxa (Hip) • Ch 1: Femur • Ch 2: Tibia</text>
+                                
+                                <text x="395" y="180" fill="#00f0ff" font-weight="bold">Ch 3-5: Right Mid (RM) Leg</text>
+                                <text x="410" y="195">Ch 3: Coxa (Hip) • Ch 4: Femur • Ch 5: Tibia</text>
+                                
+                                <text x="395" y="220" fill="#00f0ff" font-weight="bold">Ch 6-8: Right Rear (RR) Leg</text>
+                                <text x="410" y="235">Ch 6: Coxa (Hip) • Ch 7: Femur • Ch 8: Tibia</text>
+                            </g>
+
+                            <!-- 9 Servo Graphic Icons -->
+                            <rect x="395" y="250" width="280" height="45" rx="6" fill="#090d16" stroke="#334155"/>
+                            <text x="405" y="277" fill="#f472b6" font-size="10" font-weight="bold">⚙️ 9x TowerPro / SG90 / MG996R Servos Connected</text>
+                        </g>
+
+                        <!-- COMPONENT 4: PCA9685 BOARD 2 (ADDRESS 0x41 - LEFT LEGS 9-17) -->
+                        <g id="cmp-pca2">
+                            <rect x="730" y="30" width="340" height="280" rx="10" fill="url(#pcaGrad)" stroke="#38bdf8" stroke-width="2"/>
+                            <text x="745" y="55" fill="#38bdf8" font-weight="bold" font-size="13">🤖 PCA9685 BOARD 2 (0x41)</text>
+                            <text x="745" y="72" fill="#94a3b8" font-size="9.5">Servos 9-17 • Left Tri-Leg (LF, LM, LR)</text>
+
+                            <!-- Screw Terminal & Logic Header -->
+                            <rect x="745" y="85" width="110" height="35" rx="4" fill="#0f172a" stroke="#f59e0b"/>
+                            <text x="753" y="100" fill="#f59e0b" font-weight="bold" font-size="9.5">V+ POWER IN</text>
+                            <text x="753" y="114" fill="#cbd5e1" font-size="8.5">+5V 10A UBEC Bus</text>
+
+                            <!-- Channels breakdown -->
+                            <g font-size="9" fill="#e2e8f0">
+                                <text x="745" y="140" fill="#38bdf8" font-weight="bold">Ch 0-2: Left Front (LF) Leg</text>
+                                <text x="760" y="155">Ch 0: Coxa (Hip) • Ch 1: Femur • Ch 2: Tibia</text>
+                                
+                                <text x="745" y="180" fill="#38bdf8" font-weight="bold">Ch 3-5: Left Mid (LM) Leg</text>
+                                <text x="760" y="195">Ch 3: Coxa (Hip) • Ch 4: Femur • Ch 5: Tibia</text>
+                                
+                                <text x="745" y="220" fill="#38bdf8" font-weight="bold">Ch 6-8: Left Rear (LR) Leg</text>
+                                <text x="760" y="235">Ch 6: Coxa (Hip) • Ch 7: Femur • Ch 8: Tibia</text>
+                            </g>
+
+                            <!-- 9 Servo Graphic Icons -->
+                            <rect x="745" y="250" width="310" height="45" rx="6" fill="#090d16" stroke="#334155"/>
+                            <text x="755" y="277" fill="#f472b6" font-size="10" font-weight="bold">⚙️ 9x TowerPro / SG90 / MG996R Servos Connected</text>
+                        </g>
+
+                        <!-- COMPONENT 5: L298N DUAL H-BRIDGE MOTOR DRIVER -->
+                        <g id="cmp-l298">
+                            <rect x="380" y="340" width="310" height="180" rx="10" fill="url(#l298Grad)" stroke="#c084fc" stroke-width="2"/>
+                            <text x="395" y="365" fill="#c084fc" font-weight="bold" font-size="13">⚙️ L298N DUAL H-BRIDGE DRIVER</text>
+                            <text x="395" y="382" fill="#94a3b8" font-size="9.5">Mouth & Pulsating Neck DC Motors</text>
+
+                            <g font-size="9" fill="#e2e8f0">
+                                <text x="395" y="405" fill="#a855f7" font-weight="bold">OUT 1 / OUT 2 ➔ Mouth DC Motor</text>
+                                <text x="410" y="420" fill="#94a3b8">Inputs: ENA (GPIO 18 PWM) • IN1 (GPIO 23) • IN2 (GPIO 24)</text>
+
+                                <text x="395" y="445" fill="#a855f7" font-weight="bold">OUT 3 / OUT 4 ➔ Neck DC Motor</text>
+                                <text x="410" y="460" fill="#94a3b8">Inputs: ENB (GPIO 19 PWM) • IN3 (GPIO 25) • IN4 (GPIO 8)</text>
+
+                                <text x="395" y="490" fill="#f59e0b">Power Terminals: +7.4V Battery / GND / +5V Logic</text>
+                            </g>
+                        </g>
+
+                        <!-- COMPONENT 6: 4x HC-SR04 ULTRASONIC SENSORS ARRAY -->
+                        <g id="cmp-ultrasonic">
+                            <rect x="730" y="340" width="340" height="180" rx="10" fill="url(#sensorGrad)" stroke="#10b981" stroke-width="2"/>
+                            <text x="745" y="365" fill="#34d399" font-weight="bold" font-size="13">📡 4x HC-SR04 ULTRASONIC SENSOR ARRAY</text>
+                            <text x="745" y="382" fill="#94a3b8" font-size="9.5">Obstacle Avoidance & Ranging</text>
+
+                            <g font-size="9" fill="#e2e8f0">
+                                <text x="745" y="405" fill="#34d399" font-weight="bold">Front Sensor: Trig GPIO 5 | Echo GPIO 6</text>
+                                <text x="745" y="425" fill="#34d399" font-weight="bold">Rear Sensor:  Trig GPIO 12 | Echo GPIO 13</text>
+                                <text x="745" y="445" fill="#34d399" font-weight="bold">Left Sensor:  Trig GPIO 16 | Echo GPIO 20</text>
+                                <text x="745" y="465" fill="#34d399" font-weight="bold">Right Sensor: Trig GPIO 21 | Echo GPIO 26</text>
+
+                                <rect x="745" y="480" width="310" height="28" rx="4" fill="#0f172a" stroke="#f59e0b"/>
+                                <text x="755" y="497" fill="#fbbf24" font-size="8.5" font-weight="bold">⚠️ Echo Pins: 1kΩ / 2kΩ Divider steps 5V down to 3.3V Pi GPIO</text>
+                            </g>
+                        </g>
+
+                        <!-- WIRING TRACES & BUSES (COLOR-CODED CONNECTORS) -->
+                        <path d="M 90 130 L 90 160 L 350 160 L 350 100 L 395 100" fill="none" stroke="#ef4444" stroke-width="3" filter="url(#glow)"/>
+                        <path d="M 350 100 L 710 100 L 745 100" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="4,2"/>
+                        <path d="M 90 160 L 45 160 L 45 252" fill="none" stroke="#ef4444" stroke-width="2"/>
+
+                        <path d="M 185 130 L 185 170 L 360 170 L 360 272" fill="none" stroke="#10b981" stroke-width="3"/>
+                        <path d="M 360 170 L 360 115 L 395 115" fill="none" stroke="#10b981" stroke-width="2"/>
+
+                        <path d="M 280 292 L 350 292 L 350 40 L 380 40" fill="none" stroke="#00f0ff" stroke-width="2.5" filter="url(#glow)"/>
+                        <path d="M 690 40 L 730 40" fill="none" stroke="#00f0ff" stroke-width="2.5" stroke-dasharray="3,3"/>
+
+                        <path d="M 280 312 L 340 312 L 340 25 L 380 25" fill="none" stroke="#f59e0b" stroke-width="2.5" filter="url(#glow)"/>
+                        <path d="M 690 25 L 730 25" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="3,3"/>
+
+                        <path d="M 280 342 L 340 342 L 340 400 L 380 400" fill="none" stroke="#c084fc" stroke-width="2"/>
+
+                        <path d="M 280 382 L 330 382 L 330 500 L 360 500 L 360 420 L 730 420" fill="none" stroke="#34d399" stroke-width="2"/>
+
+                        <!-- COLOR LEGEND BAR (BOTTOM) -->
+                        <g id="cmp-legend" transform="translate(30, 540)">
+                            <rect x="0" y="0" width="1040" height="130" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+                            <text x="20" y="25" fill="#f8fafc" font-weight="bold" font-size="12">📋 SCHEMATIC WIRING COLOR CODE KEY & LEGEND</text>
+
+                            <g transform="translate(20, 45)" font-size="10" font-weight="bold">
+                                <rect x="0" y="0" width="18" height="12" rx="3" fill="#ef4444"/>
+                                <text x="26" y="10" fill="#cbd5e1">+5V High Current Power Rail (UBEC Regulator)</text>
+
+                                <rect x="340" y="0" width="18" height="12" rx="3" fill="#10b981"/>
+                                <text x="366" y="10" fill="#cbd5e1">Common Ground Rail (GND)</text>
+
+                                <rect x="680" y="0" width="18" height="12" rx="3" fill="#00f0ff"/>
+                                <text x="706" y="10" fill="#cbd5e1">I2C Data (SDA - GPIO 2 / Pin 3)</text>
+
+                                <rect x="0" y="30" width="18" height="12" rx="3" fill="#f59e0b"/>
+                                <text x="26" y="40" fill="#cbd5e1">I2C Clock (SCL - GPIO 3 / Pin 5)</text>
+
+                                <rect x="340" y="30" width="18" height="12" rx="3" fill="#c084fc"/>
+                                <text x="366" y="40" fill="#cbd5e1">L298N Motor PWM & Direction Lines</text>
+
+                                <rect x="680" y="30" width="18" height="12" rx="3" fill="#34d399"/>
+                                <text x="706" y="40" fill="#cbd5e1">HC-SR04 Trigger / Echo Lines</text>
+
+                                <rect x="0" y="60" width="18" height="12" rx="3" fill="#f472b6"/>
+                                <text x="26" y="70" fill="#cbd5e1">18x Servo PWM Signal Channels (PCA9685)</text>
+
+                                <rect x="340" y="60" width="18" height="12" rx="3" fill="#e2e8f0"/>
+                                <text x="366" y="70" fill="#cbd5e1">Voltage Divider Resistor Step-Down (3.3V Logic Safe)</text>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Hardware Modules Grid -->
+            <div class="wiring-grid">
+                <!-- Module 1: Raspberry Pi GPIO Master Terminal Box -->
+                <div class="wiring-card">
+                    <div class="wiring-card-header">
+                        <span class="wiring-badge rpi">Raspberry Pi GPIO</span>
+                        <h3>Raspberry Pi 4/5 Master GPIO Pinout Map</h3>
+                    </div>
+
+                    <div class="wiring-table-wrapper">
+                        <table class="wiring-table">
+                            <thead>
+                                <tr>
+                                    <th>GPIO / Pin</th>
+                                    <th>Signal Name</th>
+                                    <th>Connected Subsystem</th>
+                                    <th>Wire Code / Function</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="pin-tag i2c">GPIO 2 (Pin 3)</span></td>
+                                    <td>SDA (I2C Data)</td>
+                                    <td>PCA9685 Board 1 & 2 (SDA)</td>
+                                    <td><span class="wire-dot blue"></span> Blue • I2C Bus Data Line</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag i2c">GPIO 3 (Pin 5)</span></td>
+                                    <td>SCL (I2C Clock)</td>
+                                    <td>PCA9685 Board 1 & 2 (SCL)</td>
+                                    <td><span class="wire-dot yellow"></span> Yellow • I2C Bus Clock Line</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag pwm">GPIO 18 (Pin 12)</span></td>
+                                    <td>L298_ENA (PWM)</td>
+                                    <td>L298N Motor Driver (ENA)</td>
+                                    <td><span class="wire-dot orange"></span> Amber • Mouth Speed PWM</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag gpio">GPIO 23 (Pin 16)</span></td>
+                                    <td>L298_IN1</td>
+                                    <td>L298N Motor Driver (IN1)</td>
+                                    <td><span class="wire-dot purple"></span> Purple • Mouth Dir A</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag gpio">GPIO 24 (Pin 18)</span></td>
+                                    <td>L298_IN2</td>
+                                    <td>L298N Motor Driver (IN2)</td>
+                                    <td><span class="wire-dot purple"></span> Purple • Mouth Dir B</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag pwm">GPIO 19 (Pin 35)</span></td>
+                                    <td>L298_ENB (PWM)</td>
+                                    <td>L298N Motor Driver (ENB)</td>
+                                    <td><span class="wire-dot orange"></span> Amber • Neck Pulsating PWM</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag gpio">GPIO 25 (Pin 22)</span></td>
+                                    <td>L298_IN3</td>
+                                    <td>L298N Motor Driver (IN3)</td>
+                                    <td><span class="wire-dot purple"></span> Purple • Neck Dir A</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag gpio">GPIO 8 (Pin 24)</span></td>
+                                    <td>L298_IN4</td>
+                                    <td>L298N Motor Driver (IN4)</td>
+                                    <td><span class="wire-dot purple"></span> Purple • Neck Dir B</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 5 (Pin 29)</span></td>
+                                    <td>TRIG_FRONT</td>
+                                    <td>Front HC-SR04 Sensor (Trig)</td>
+                                    <td><span class="wire-dot green"></span> Green • Trigger Output Pulse</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 6 (Pin 31)</span></td>
+                                    <td>ECHO_FRONT</td>
+                                    <td>Front HC-SR04 Sensor (Echo)</td>
+                                    <td><span class="wire-dot white"></span> White • Echo Input (1k/2k Divider)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 12 (Pin 32)</span></td>
+                                    <td>TRIG_REAR</td>
+                                    <td>Rear HC-SR04 Sensor (Trig)</td>
+                                    <td><span class="wire-dot green"></span> Green • Trigger Output Pulse</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 13 (Pin 33)</span></td>
+                                    <td>ECHO_REAR</td>
+                                    <td>Rear HC-SR04 Sensor (Echo)</td>
+                                    <td><span class="wire-dot white"></span> White • Echo Input (1k/2k Divider)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 16 (Pin 36)</span></td>
+                                    <td>TRIG_LEFT</td>
+                                    <td>Left HC-SR04 Sensor (Trig)</td>
+                                    <td><span class="wire-dot green"></span> Green • Trigger Output Pulse</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 20 (Pin 38)</span></td>
+                                    <td>ECHO_LEFT</td>
+                                    <td>Left HC-SR04 Sensor (Echo)</td>
+                                    <td><span class="wire-dot white"></span> White • Echo Input (1k/2k Divider)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 21 (Pin 40)</span></td>
+                                    <td>TRIG_RIGHT</td>
+                                    <td>Right HC-SR04 Sensor (Trig)</td>
+                                    <td><span class="wire-dot green"></span> Green • Trigger Output Pulse</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag sensor">GPIO 26 (Pin 37)</span></td>
+                                    <td>ECHO_RIGHT</td>
+                                    <td>Right HC-SR04 Sensor (Echo)</td>
+                                    <td><span class="wire-dot white"></span> White • Echo Input (1k/2k Divider)</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag pwr">Pin 2 / Pin 4</span></td>
+                                    <td>+5V VCC</td>
+                                    <td>Pi Logic & PCA9685 Logic VCC</td>
+                                    <td><span class="wire-dot red"></span> Red • +5V DC Power Input Rail</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="pin-tag gnd">Pin 6 / 9 / 14</span></td>
+                                    <td>GND</td>
+                                    <td>Common Ground Rail</td>
+                                    <td><span class="wire-dot black"></span> Black • Common Ground (GND)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Module 2: Dual PCA9685 16-Channel Servo Controllers -->
+                <div class="wiring-card">
+                    <div class="wiring-card-header">
+                        <span class="wiring-badge pca">Dual PCA9685 PWM</span>
+                        <h3>18-Servo Channel Allocation Map</h3>
+                    </div>
+
+                    <div class="wiring-subcard-grid">
+                        <div class="wiring-subcard">
+                            <div class="subcard-header">
+                                <h4>PCA9685 Board 1 (Address 0x40) — Right Tri-Leg</h4>
+                                <span class="addr-tag">0x40</span>
+                            </div>
+                            <ul class="pin-list">
+                                <li><strong>Ch 0:</strong> Leg 1 (Front Right) — Coxa Servo (Hip Joint)</li>
+                                <li><strong>Ch 1:</strong> Leg 1 (Front Right) — Femur Servo (Thigh Joint)</li>
+                                <li><strong>Ch 2:</strong> Leg 1 (Front Right) — Tibia Servo (Knee Joint)</li>
+                                <li><strong>Ch 3:</strong> Leg 2 (Mid Right) — Coxa Servo (Hip Joint)</li>
+                                <li><strong>Ch 4:</strong> Leg 2 (Mid Right) — Femur Servo (Thigh Joint)</li>
+                                <li><strong>Ch 5:</strong> Leg 2 (Mid Right) — Tibia Servo (Knee Joint)</li>
+                                <li><strong>Ch 6:</strong> Leg 3 (Rear Right) — Coxa Servo (Hip Joint)</li>
+                                <li><strong>Ch 7:</strong> Leg 3 (Rear Right) — Femur Servo (Thigh Joint)</li>
+                                <li><strong>Ch 8:</strong> Leg 3 (Rear Right) — Tibia Servo (Knee Joint)</li>
+                                <li class="pwr-note">⚡ Power Screw Terminal: Connected to +5V 10A High Current UBEC Bus</li>
+                            </ul>
+                        </div>
+
+                        <div class="wiring-subcard">
+                            <div class="subcard-header">
+                                <h4>PCA9685 Board 2 (Address 0x41) — Left Tri-Leg</h4>
+                                <span class="addr-tag">0x41</span>
+                            </div>
+                            <ul class="pin-list">
+                                <li><strong>Ch 0:</strong> Leg 4 (Front Left) — Coxa Servo (Hip Joint)</li>
+                                <li><strong>Ch 1:</strong> Leg 4 (Front Left) — Femur Servo (Thigh Joint)</li>
+                                <li><strong>Ch 2:</strong> Leg 4 (Front Left) — Tibia Servo (Knee Joint)</li>
+                                <li><strong>Ch 3:</strong> Leg 5 (Mid Left) — Coxa Servo (Hip Joint)</li>
+                                <li><strong>Ch 4:</strong> Leg 5 (Mid Left) — Femur Servo (Thigh Joint)</li>
+                                <li><strong>Ch 5:</strong> Leg 5 (Mid Left) — Tibia Servo (Knee Joint)</li>
+                                <li><strong>Ch 6:</strong> Leg 6 (Rear Left) — Coxa Servo (Hip Joint)</li>
+                                <li><strong>Ch 7:</strong> Leg 6 (Rear Left) — Femur Servo (Thigh Joint)</li>
+                                <li><strong>Ch 8:</strong> Leg 6 (Rear Left) — Tibia Servo (Knee Joint)</li>
+                                <li class="pwr-note">⚡ Power Screw Terminal: Shared +5V 10A High Current Servo Bus</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Module 3: L298N Dual Motor Driver & Ultrasonic Array -->
+                <div class="wiring-card">
+                    <div class="wiring-card-header">
+                        <span class="wiring-badge l298">L298N & HC-SR04</span>
+                        <h3>DC Motor Driver & Ultrasonic Sensor Subsystems</h3>
+                    </div>
+
+                    <div class="wiring-subcard-grid">
+                        <div class="wiring-subcard">
+                            <div class="subcard-header">
+                                <h4>L298N Dual H-Bridge DC Motor Driver</h4>
+                                <span class="addr-tag motor">DC DRIVER</span>
+                            </div>
+                            <ul class="pin-list">
+                                <li><strong>OUT 1 / OUT 2:</strong> Mouth Mechanism DC Motor Terminals</li>
+                                <li><strong>OUT 3 / OUT 4:</strong> Pulsating Neck Mechanism DC Motor Terminals</li>
+                                <li><strong>IN 1 / IN 2 / ENA:</strong> GPIO 23 / 24 / 18 (PWM Speed & Direction)</li>
+                                <li><strong>IN 3 / IN 4 / ENB:</strong> GPIO 25 / 8 / 19 (PWM Speed & Direction)</li>
+                                <li><strong>Power Terminals:</strong> +7.4V / +12V Battery Input (+) / Common GND / +5V Logic Output</li>
+                            </ul>
+                        </div>
+
+                        <div class="wiring-subcard">
+                            <div class="subcard-header">
+                                <h4>4x HC-SR04 Ultrasonic Distance Sensors</h4>
+                                <span class="addr-tag sensor">SENSORS</span>
+                            </div>
+                            <ul class="pin-list">
+                                <li><strong>Front Sensor:</strong> VCC = 5V | GND = GND | Trig = GPIO 5 | Echo = GPIO 6</li>
+                                <li><strong>Rear Sensor:</strong> VCC = 5V | GND = GND | Trig = GPIO 12 | Echo = GPIO 13</li>
+                                <li><strong>Left Sensor:</strong> VCC = 5V | GND = GND | Trig = GPIO 16 | Echo = GPIO 20</li>
+                                <li><strong>Right Sensor:</strong> VCC = 5V | GND = GND | Trig = GPIO 21 | Echo = GPIO 26</li>
+                                <li class="pwr-note">⚠️ Voltage Protection Note: All HC-SR04 Echo pins use a 1kΩ / 2kΩ resistor divider to step down 5V Echo signals to 3.3V Pi GPIO logic levels.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Module 4: Power System Architecture -->
+                <div class="wiring-card full-width">
+                    <div class="wiring-card-header">
+                        <span class="wiring-badge power">Power System</span>
+                        <h3>Power Architecture, UBEC Regulation & Common Grounding</h3>
+                    </div>
+
+                    <div class="wiring-power-box">
+                        <div class="power-block battery">
+                            <div class="pb-title">🔋 Main LiPo Battery</div>
+                            <div class="pb-desc">7.4V (2S) or 11.1V (3S) High Discharge LiPo Power Source</div>
+                        </div>
+
+                        <div class="power-arrow">➔</div>
+
+                        <div class="power-block ubec">
+                            <div class="pb-title">⚡ 5V 10A UBEC Buck Regulator</div>
+                            <div class="pb-desc">High Efficiency DC-DC Step-down Converter (Supplies 18 Servos & Pi Logic)</div>
+                        </div>
+
+                        <div class="power-arrow">➔</div>
+
+                        <div class="power-block rails">
+                            <div class="pb-title">🔌 Power Bus & Common Ground</div>
+                            <div class="pb-desc">
+                                • +5V DC High Current Screw Terminals (PCA9685 Board 1 & 2)<br>
+                                • +5V VCC & GND Header Pins (Raspberry Pi 4/5)<br>
+                                • Common Ground Bus tied between Battery GND, Pi GND, Servo GND, L298N GND & Sensor GND
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Print Footer Notice -->
+            <div class="print-doc-footer">
+                <p>Hexapod Robot Hardware Control Workbench • Electrical Wiring & Pinout Guide • Confidential / Engineering Reference</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 5: USER INSTRUCTIONS & MANUAL GUIDE VIEW -->
+    <div class="view-screen" id="viewInstructions">
+        <div class="guide-wrapper">
+            <div class="guide-header">
+                <div class="guide-title-box">
+                    <span class="guide-icon">📖</span>
+                    <div>
+                        <h2>Hexapod Control Center Operating Manual & User Guide</h2>
+                        <p>Complete Setup, 3D Kinematics Pose Control, Servo Calibration, Gemini AI & Maintenance</p>
+                    </div>
+                </div>
+                <div class="guide-actions">
+                    <button class="btn-preset primary" id="btnExportInstructionsPDF">📄 Export PDF</button>
+                    <button class="btn-preset" id="btnPrintInstructionsPDF">🖨️ Quick Print</button>
+                </div>
+            </div>
+
+            <div class="guide-grid">
+                <!-- Step 1 -->
+                <div class="guide-card">
+                    <div class="guide-card-header">
+                        <span class="guide-step">Step 1</span>
+                        <h3>⚡ Quick Start & System Power On</h3>
+                    </div>
+                    <ul class="guide-list">
+                        <li><strong>1. Power Supply Connection:</strong> Connect a 2S (7.4V) or 3S (11.1V) LiPo battery to the high-current power terminal bus. Ensure the 5V 10A UBEC buck regulator powers both PCA9685 boards and Raspberry Pi logic.</li>
+                        <li><strong>2. Start Web Controller:</strong> Launch the Python server terminal command:
+                            <br><code>python3 server.py</code></li>
+                        <li><strong>3. Open Workbench:</strong> Navigate to <strong>http://localhost:8090</strong> in your web browser.</li>
+                        <li><strong>4. Connection Status:</strong> Ensure the status badge at top right displays <span class="status-online">ONLINE</span>.</li>
+                    </ul>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="guide-card">
+                    <div class="guide-card-header">
+                        <span class="guide-step">Step 2</span>
+                        <h3>🎮 3D Gait Kinematics & Pose Control</h3>
+                    </div>
+                    <ul class="guide-list">
+                        <li><strong>• Walking Gait Modes:</strong> Choose between <strong>Tripod</strong> (stable 3-leg gait), <strong>Run</strong> (fast gait), <strong>Ripple</strong>, and <strong>Wave</strong> gaits.</li>
+                        <li><strong>• Body Pose Sliders:</strong> Dynamically alter height offset (-40mm to +50mm), Pitch angle, Roll tilt, Yaw twist, and Stance Spread Width in real time.</li>
+                        <li><strong>• Step Geometry:</strong> Adjust Step Lift Height (15-60mm) and Stride Length (30-90mm) using the left panel sliders.</li>
+                        <li><strong>• Driving Shortcuts:</strong> Drive forward (<code>W</code> / &uparrow;), reverse (<code>S</code> / &downarrow;), turn left/right (<code>A</code> / <code>D</code>), and spin (<code>Q</code> / <code>E</code>). Press <code>Spacebar</code> to stop.</li>
+                    </ul>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="guide-card">
+                    <div class="guide-card-header">
+                        <span class="guide-step">Step 3</span>
+                        <h3>🔧 18-Servo Trim Calibration Workbench</h3>
+                    </div>
+                    <ul class="guide-list">
+                        <li><strong>1. Calibration Tab:</strong> Switch to <strong>🔧 Servo Calibration</strong> view to inspect realtime 3D preview and fine-tune trim offsets.</li>
+                        <li><strong>2. Joint Trim Adjustments:</strong> Calibrate individual offset angles (-20° to +20°) for Coxa (hip), Femur (thigh), and Tibia (knee) joints across all 6 legs.</li>
+                        <li><strong>3. Quick Stance Presets:</strong> Test hardware alignment using quick buttons: <em>Stand Neutral</em>, <em>Pancake Flat 🥞</em>, <em>Low Crouch</em>, <em>High Stance</em>, <em>Beg Position 🐶</em>, and <em>Bow / Respect</em>.</li>
+                    </ul>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="guide-card">
+                    <div class="guide-card-header">
+                        <span class="guide-step">Step 4</span>
+                        <h3>🤖 Gemini AI Multimodal Assistant & Camera Vision</h3>
+                    </div>
+                    <ul class="guide-list">
+                        <li><strong>1. API Key Setup:</strong> Enter your Google Gemini API key in the AI panel or under <strong>⚙️ Settings & HW</strong>.</li>
+                        <li><strong>2. Activate Microphone:</strong> Click <strong>🎙️ Activate Mic</strong> for live hands-free speech recognition with VU meter sensitivity gain control.</li>
+                        <li><strong>3. Camera Scene Description:</strong> Click <strong>👁️ Describe Scene</strong> to capture webcam frames and have Gemini speak environment descriptions out loud!</li>
+                        <li><strong>4. Hand Gesture Control:</strong> Show 5 open fingers to camera to trigger greeting leg waves; show closed fist to halt motion.</li>
+                    </ul>
+                </div>
+
+                <!-- Step 5 -->
+                <div class="guide-card">
+                    <div class="guide-card-header">
+                        <span class="guide-step">Step 5</span>
+                        <h3>🎵 MP3 Music Player & Lip-Sync Dance Studio</h3>
+                    </div>
+                    <ul class="guide-list">
+                        <li><strong>1. Import Music Files:</strong> Click <strong>📁 Import MP3 to static/audio/ Folder</strong> to load songs into local storage.</li>
+                        <li><strong>2. Associated Dance Routines:</strong> Select from routines including <em>Alternating Front Leg Wave</em>, <em>Ultimate Combo Dance</em>, <em>Macarena</em>, <em>Catwalk Strut</em>, <em>K-Pop Groove</em>, and <em>Techno Shuffle</em>.</li>
+                        <li><strong>3. Playback & Lip-Sync:</strong> Click <strong>▶️ Play & Lip-Sync</strong>. The mouth DC motor automatically opens during speech/song vocals!</li>
+                    </ul>
+                </div>
+
+                <!-- Step 6 -->
+                <div class="guide-card">
+                    <div class="guide-card-header">
+                        <span class="guide-step">Step 6</span>
+                        <h3>📡 Autonomous Avoidance & Safety Maintenance</h3>
+                    </div>
+                    <ul class="guide-list">
+                        <li><strong>• Ultrasonic Array:</strong> 4x HC-SR04 sensors continuously monitor 360° obstacle distances (Front, Rear, Left, Right).</li>
+                        <li><strong>• Auto Steering:</strong> Toggle <strong>Enable Ultrasonic Obstacle Avoidance</strong> in Settings. When enabled, the robot automatically steers around obstacles &lt; 35 cm.</li>
+                        <li><strong>• Battery Protection:</strong> Disconnect LiPo battery when not in use. Verify 1kΩ / 2kΩ resistor dividers step down 5V Echo signals to 3.3V Pi GPIO levels.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Modules -->
+    <script src="lib/html2pdf.bundle.min.js"></script>
+    <script src="kinematics.js?v=200"></script>
+    <script src="hexapod3d.js?v=200"></script>
+    <script src="gemini_chat.js?v=200"></script>
+    <script src="app.js?v=200"></script>
+</body>
+</html>
